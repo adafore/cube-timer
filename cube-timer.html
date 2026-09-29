@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=5.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0c10">
+<title>Cube Timer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap');
+  :root {
+    --bg: #0a0c10; --surface: #111318; --surface2: #181c24;
+    --border: #232836; --accent: #00e5ff; --accent2: #ff6b35;
+    --accent3: #7cff6b; --text: #e8eaf0; --muted: #5a6070; --danger: #ff3860;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Rajdhani', sans-serif; min-height: 100vh; overflow-x: hidden; }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background-image: linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px; pointer-events: none; z-index: 0;
+  }
+  .app { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 16px 12px; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
+  .logo { font-size: 22px; font-weight: 700; letter-spacing: 3px; color: var(--accent); text-transform: uppercase; }
+  .logo span { color: var(--accent2); }
+  .header-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .btn {
+    font-family: 'Share Tech Mono', monospace; font-size: 12px; padding: 8px 16px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    cursor: pointer; transition: all 0.15s; letter-spacing: 1px; text-transform: uppercase; border-radius: 2px;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { border-color: var(--accent); color: var(--accent); background: rgba(0,229,255,0.05); }
+  .btn.danger { border-color: var(--danger); color: var(--danger); }
+
+  .cube-tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; }
+  .cube-tab {
+    font-family: 'Share Tech Mono', monospace; font-size: 10px; padding: 5px 10px;
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+    cursor: pointer; transition: all 0.15s; letter-spacing: 1px; text-transform: uppercase; border-radius: 2px;
+  }
+  .cube-tab:hover { border-color: var(--accent); color: var(--accent); }
+  .cube-tab.active { border-color: var(--accent); color: var(--bg); background: var(--accent); font-weight: 700; }
+
+  .main-grid { display: grid; grid-template-columns: 1fr 300px; gap: 16px; }
+  @media (max-width: 750px) { .main-grid { grid-template-columns: 1fr; } }
+
+  .timer-panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+    padding: 20px 16px; display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+  .solve-context { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; }
+  .timer-display {
+    font-family: 'Share Tech Mono', monospace; font-size: clamp(40px, 12vw, 72px); color: var(--accent);
+    letter-spacing: 4px; text-shadow: 0 0 40px rgba(0,229,255,0.3); transition: color 0.1s; line-height: 1; user-select: none;
+  }
+  .timer-display.running { color: var(--accent3); text-shadow: 0 0 40px rgba(124,255,107,0.3); }
+  .timer-hint { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; text-align: center; }
+
+  /* SPLITS */
+  .splits-area { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+  .splits-label { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 2px; }
+  .split-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-radius: 2px; border-left: 3px solid transparent;
+    background: var(--surface2); transition: all 0.2s;
+  }
+  .split-row.done { border-left-color: var(--accent2); }
+  .split-row.active { border-left-color: var(--accent3); background: rgba(124,255,107,0.06); }
+  .split-row.pending { opacity: 0.35; }
+  .split-name { font-size: 14px; font-weight: 600; color: var(--text); }
+  .split-time { font-family: 'Share Tech Mono', monospace; font-size: 15px; color: var(--muted); }
+  .split-row.done .split-time { color: var(--accent2); }
+  .split-row.active .split-time { color: var(--accent3); }
+
+  /* LAP BUTTON */
+  .btn-lap {
+    font-family: 'Share Tech Mono', monospace; font-size: 13px; padding: 12px 28px;
+    border: 2px solid var(--accent2); background: rgba(255,107,53,0.07); color: var(--accent2);
+    cursor: pointer; transition: all 0.15s; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px;
+  }
+  .btn-lap:hover:not(:disabled) { background: rgba(255,107,53,0.18); }
+  .btn-lap:disabled { opacity: 0.3; cursor: default; }
+
+  .timer-controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .btn-big {
+    font-family: 'Share Tech Mono', monospace; font-size: 14px; padding: 14px 32px;
+    border: 2px solid var(--accent); background: rgba(0,229,255,0.07); color: var(--accent);
+    cursor: pointer; transition: all 0.15s; letter-spacing: 2px; text-transform: uppercase; border-radius: 2px;
+  }
+  .btn-big:hover { background: rgba(0,229,255,0.15); }
+  .btn-big.stop { border-color: var(--danger); color: var(--danger); background: rgba(255,56,96,0.07); }
+  .btn-big.stop:hover { background: rgba(255,56,96,0.15); }
+  .btn-big.save { border-color: var(--accent3); color: var(--accent3); background: rgba(124,255,107,0.07); }
+  .btn-big.save:hover { background: rgba(124,255,107,0.15); }
+  .btn-big.muted { border-color: var(--muted); color: var(--muted); background: transparent; }
+
+  .best-time-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 16px 24px; text-align: center; width: 100%; }
+  .best-time-label { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 6px; }
+  .best-time-value { font-family: 'Share Tech Mono', monospace; font-size: 32px; color: var(--accent2); text-shadow: 0 0 20px rgba(255,107,53,0.3); }
+  .best-time-date { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .best-splits { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .best-split-chip { font-family: 'Share Tech Mono', monospace; font-size: 10px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 2px; color: var(--muted); background: var(--surface); }
+  .best-split-chip span { color: var(--accent2); }
+
+  .stats-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .stats-title { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--muted); letter-spacing: 3px; text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+  .stat-row { display: flex; justify-content: space-between; align-items: center; }
+  .stat-label { font-size: 13px; color: var(--muted); }
+  .stat-value { font-family: 'Share Tech Mono', monospace; font-size: 14px; color: var(--text); }
+
+  .history-list { display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .history-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--surface2); border: 1px solid transparent; border-radius: 2px; transition: border-color 0.1s; }
+  .history-item:hover { border-color: var(--border); }
+  .history-num { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); min-width: 22px; padding-top: 2px; }
+  .history-main { flex: 1; }
+  .history-time { font-family: 'Share Tech Mono', monospace; font-size: 14px; color: var(--text); }
+  .history-time.best { color: var(--accent2); }
+  .history-splits-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+  .history-split-chip { font-family: 'Share Tech Mono', monospace; font-size: 10px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 2px; color: var(--muted); }
+  .history-date { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); padding-top: 2px; white-space: nowrap; }
+  .history-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 2px; transition: color 0.1s; }
+  .history-del:hover { color: var(--danger); }
+  .empty-msg { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--muted); text-align: center; padding: 24px 0; }
+
+  .data-section { margin-top: 20px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; }
+  .data-section-title { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px; }
+  .data-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  #fileInput { display: none; }
+  .btn-fs {
+    font-family: 'Share Tech Mono', monospace; font-size: 13px; padding: 8px 14px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    cursor: pointer; transition: all 0.15s; letter-spacing: 1px;
+    text-transform: uppercase; border-radius: 2px;
+  }
+  .btn-fs:hover, .btn-fs.active { border-color: var(--accent); color: var(--accent); }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface2); border: 1px solid var(--accent3); color: var(--accent3); font-family: 'Share Tech Mono', monospace; font-size: 12px; padding: 12px 20px; border-radius: 2px; letter-spacing: 1px; opacity: 0; transform: translateY(10px); transition: all 0.3s; z-index: 100; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">Cube<span>Timer</span></div>
+    <div class="header-actions">
+      <button class="btn-fs" id="fsBtn" onclick="toggleFullscreen()" title="Celá obrazovka">⛶</button>
+      <button class="btn" onclick="exportData()">⬇ Export</button>
+      <button class="btn" onclick="document.getElementById('fileInput').click()">⬆ Import</button>
+      <input type="file" id="fileInput" accept=".json" onchange="importData(event)">
+    </div>
+  </header>
+
+  <div class="cube-tabs" id="cubeTabs"></div>
+
+  <div class="main-grid">
+    <div>
+      <div class="timer-panel">
+        <div class="solve-context" id="solveContext"></div>
+        <div class="timer-display" id="timerDisplay">0:00.000</div>
+        <div class="timer-hint" id="timerHint"></div>
+
+        <div class="splits-area" id="splitsArea" style="display:none"></div>
+
+        <button class="btn-lap" id="lapBtn" onclick="markLap()" style="display:none" disabled>⏱ MEZIČAS</button>
+
+        <div class="timer-controls">
+          <button class="btn-big" id="startStopBtn" onclick="toggleTimer()">START</button>
+          <button class="btn-big save" id="saveBtn" onclick="saveTime()" style="display:none">ULOŽIT</button>
+          <button class="btn-big muted" onclick="resetTimer()">RESET</button>
+        </div>
+
+        <div class="best-time-card">
+          <div class="best-time-label">Nejlepší čas</div>
+          <div class="best-time-value" id="bestTime">—</div>
+          <div class="best-time-date" id="bestDate"></div>
+          <div class="best-splits" id="bestSplits"></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="stats-panel">
+        <div class="stats-title">Statistiky</div>
+        <div class="stat-row"><span class="stat-label">Počet pokusů</span><span class="stat-value" id="statCount">0</span></div>
+        <div class="stat-row"><span class="stat-label">Průměr</span><span class="stat-value" id="statAvg">—</span></div>
+        <div class="stat-row"><span class="stat-label">Ao5</span><span class="stat-value" id="statAo5">—</span></div>
+        <div class="stat-row"><span class="stat-label">Ao12</span><span class="stat-value" id="statAo12">—</span></div>
+        <div class="stat-row"><span class="stat-label">Nejhorší</span><span class="stat-value" id="statWorst">—</span></div>
+        <div class="stats-title" style="margin-top:4px">Historie</div>
+        <div class="history-list" id="historyList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="data-section">
+    <div class="data-section-title">Správa dat</div>
+    <div class="data-actions">
+      <button class="btn primary" onclick="exportData()">Exportovat data (.json)</button>
+      <button class="btn" onclick="document.getElementById('fileInput').click()">Importovat data</button>
+      <button class="btn danger" onclick="clearCurrentData()">Smazat aktuální kategorii</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ========== CONFIG ==========
+// splits = checkpoint labels; last one is always "finish" = full stop
+// intermediate ones = lap presses needed before stopping
+const CUBES = [
+  { id: '2x2',  label: '2×2',      splits: [] },
+  { id: '3x3',  label: '3×3',      splits: ['1. patro', '2. patro', 'Celá'] },
+  { id: '5x5',  label: '5×5',      splits: ['Středy', 'Hrany', 'Celá'] },
+  { id: 'pyra', label: 'Pyramida', splits: [] },
+  { id: 'skewb',label: 'Skewb',    splits: [] },
+  { id: 'gear', label: 'Gear',     splits: [] },
+  { id: 'mega', label: 'Megaminx', splits: [] },
+];
+
+// ========== STATE ==========
+let data       = {};
+let activeCube = '3x3';
+
+let timerInterval = null;
+let timerStart    = null;
+let elapsed       = 0;
+let running       = false;
+let lapAbsTimes   = [];   // absolute ms at each LAP press (not counting the final stop)
+let lapDone       = 0;
+let lastResult    = null; // {time, splits} after stopping
+let saved         = true;
+
+// ========== HELPERS ==========
+function fmtTime(ms) {
+  if (ms === null || ms === undefined || isNaN(ms)) return '—';
+  const m = Math.floor(ms / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  const c = ms % 1000;
+  return `${m}:${String(s).padStart(2,'0')}.${String(c).padStart(3,'0')}`;
+}
+function getCube()     { return CUBES.find(c => c.id === activeCube); }
+function hasSplits()   { return getCube().splits.length > 1; }
+function lapCount()    { return Math.max(0, getCube().splits.length - 1); } // number of intermediate laps
+function getRecords()  { return data[activeCube] || []; }
+
+// ========== STORAGE ==========
+function loadFromStorage() {
+  try { const r = localStorage.getItem('cubetimer3'); if (r) data = JSON.parse(r); } catch(e) { data = {}; }
+}
+function saveToStorage() {
+  try { localStorage.setItem('cubetimer3', JSON.stringify(data)); } catch(e) {}
+}
+
+// ========== TIMER ==========
+function toggleTimer() {
+  if (!running) startTimer(); else stopTimer();
+}
+
+function startTimer() {
+  elapsed       = 0;
+  lapAbsTimes   = [];
+  lapDone       = 0;
+  lastResult    = null;
+  saved         = false;
+  running       = true;
+  timerStart    = Date.now();
+
+  timerInterval = setInterval(() => {
+    elapsed = Date.now() - timerStart;
+    document.getElementById('timerDisplay').textContent = fmtTime(elapsed);
+    if (hasSplits()) updateSplitsLive();
+  }, 13);
+
+  document.getElementById('timerDisplay').className = 'timer-display running';
+  document.getElementById('startStopBtn').textContent = 'STOP';
+  document.getElementById('startStopBtn').className   = 'btn-big stop';
+  document.getElementById('saveBtn').style.display    = 'none';
+  setLapBtn(true);
+  renderSplitsArea();
+}
+
+function stopTimer() {
+  clearInterval(timerInterval);
+  running = false;
+
+  // Build segments: lap0, lap1-lap0, ..., elapsed-lastLap
+  const allAbs = [...lapAbsTimes, elapsed];
+  const segments = allAbs.map((abs, i) => i === 0 ? abs : abs - allAbs[i - 1]);
+
+  // Only store full splits if all intermediate laps were pressed
+  const fullSplits = (lapDone >= lapCount()) ? segments : null;
+  lastResult = { time: elapsed, splits: fullSplits };
+  saved = false;
+
+  document.getElementById('timerDisplay').className   = 'timer-display';
+  document.getElementById('startStopBtn').textContent = 'START';
+  document.getElementById('startStopBtn').className   = 'btn-big';
+  document.getElementById('saveBtn').style.display    = '';
+  setLapBtn(false);
+  renderSplitsArea();
+}
+
+function resetTimer() {
+  clearInterval(timerInterval);
+  running = false; elapsed = 0; lapAbsTimes = []; lapDone = 0;
+  lastResult = null; saved = true;
+  document.getElementById('timerDisplay').textContent  = fmtTime(0);
+  document.getElementById('timerDisplay').className    = 'timer-display';
+  document.getElementById('startStopBtn').textContent  = 'START';
+  document.getElementById('startStopBtn').className    = 'btn-big';
+  document.getElementById('saveBtn').style.display     = 'none';
+  setLapBtn(false);
+  renderSplitsArea();
+}
+
+function markLap() {
+  if (!running) return;
+  const max = lapCount();
+  if (lapDone >= max) return;
+  lapAbsTimes.push(elapsed);
+  lapDone++;
+  renderSplitsArea();
+  if (lapDone >= max) document.getElementById('lapBtn').disabled = true;
+}
+
+function setLapBtn(show) {
+  const btn = document.getElementById('lapBtn');
+  if (!hasSplits() || !show) { btn.style.display = 'none'; return; }
+  btn.style.display = '';
+  btn.disabled = (lapDone >= lapCount());
+}
+
+function saveTime() {
+  if (!lastResult) return;
+  if (!data[activeCube]) data[activeCube] = [];
+  data[activeCube].push({ time: lastResult.time, splits: lastResult.splits, date: new Date().toISOString() });
+  saveToStorage();
+  saved = true; lastResult = null;
+  document.getElementById('saveBtn').style.display = 'none';
+  renderStats();
+  showToast('Uloženo: ' + fmtTime(data[activeCube][data[activeCube].length - 1].time));
+}
+
+// ========== SPLITS RENDERING ==========
+function renderSplitsArea() {
+  const area = document.getElementById('splitsArea');
+  if (!hasSplits()) { area.style.display = 'none'; return; }
+  area.style.display = '';
+  area.innerHTML = '<div class="splits-label">Průběh složení</div>';
+
+  const cube    = getCube();
+  const nLaps   = lapCount(); // intermediate laps before final stop
+
+  cube.splits.forEach((name, i) => {
+    const row       = document.createElement('div');
+    const isLast    = i === cube.splits.length - 1;
+    const lapIdx    = i; // lap i corresponds to lapAbsTimes[i]
+
+    let state    = 'pending';
+    let timeStr  = '';
+
+    if (!isLast) {
+      // Intermediate segment
+      if (i < lapDone) {
+        // Already marked
+        state   = 'done';
+        const segMs = i === 0 ? lapAbsTimes[0] : lapAbsTimes[i] - lapAbsTimes[i - 1];
+        timeStr = fmtTime(segMs) + '  (' + fmtTime(lapAbsTimes[i]) + ')';
+      } else if (running && i === lapDone) {
+        state   = 'active';
+        const prevAbs = lapDone > 0 ? lapAbsTimes[lapDone - 1] : 0;
+        timeStr = fmtTime(elapsed - prevAbs);
+      }
+    } else {
+      // Final segment
+      if (!running && lastResult) {
+        state   = 'done';
+        if (lastResult.splits) {
+          const segMs = lastResult.splits[i];
+          timeStr = fmtTime(segMs) + '  (' + fmtTime(lastResult.time) + ')';
+        } else {
+          timeStr = fmtTime(lastResult.time);
+        }
+      } else if (running && lapDone >= nLaps) {
+        state   = 'active';
+        const prevAbs = lapAbsTimes.length > 0 ? lapAbsTimes[lapAbsTimes.length - 1] : 0;
+        timeStr = fmtTime(elapsed - prevAbs);
+      }
+    }
+
+    row.className = `split-row ${state}`;
+    row.dataset.idx = i;
+    row.innerHTML = `<span class="split-name">${name}</span><span class="split-time">${timeStr}</span>`;
+    area.appendChild(row);
+  });
+}
+
+function updateSplitsLive() {
+  const cube  = getCube();
+  const nLaps = lapCount();
+  const rows  = document.querySelectorAll('.split-row');
+
+  cube.splits.forEach((name, i) => {
+    const row    = rows[i]; if (!row) return;
+    const isLast = i === cube.splits.length - 1;
+
+    if (!isLast && running && i === lapDone) {
+      const prevAbs = lapDone > 0 ? lapAbsTimes[lapDone - 1] : 0;
+      row.querySelector('.split-time').textContent = fmtTime(elapsed - prevAbs);
+    } else if (isLast && running && lapDone >= nLaps) {
+      const prevAbs = lapAbsTimes.length > 0 ? lapAbsTimes[lapAbsTimes.length - 1] : 0;
+      row.querySelector('.split-time').textContent = fmtTime(elapsed - prevAbs);
+    }
+  });
+}
+
+// ========== STATS ==========
+function renderStats() {
+  const records = getRecords();
+  const times   = records.map(r => r.time);
+  const cube    = getCube();
+
+  const best = times.length ? Math.min(...times) : null;
+  document.getElementById('bestTime').textContent = fmtTime(best);
+
+  if (best !== null) {
+    const bestRec = records.find(r => r.time === best);
+    document.getElementById('bestDate').textContent = bestRec ? new Date(bestRec.date).toLocaleDateString('cs-CZ') : '';
+    const bs = document.getElementById('bestSplits');
+    bs.innerHTML = '';
+    if (bestRec && bestRec.splits && hasSplits()) {
+      bestRec.splits.forEach((seg, i) => {
+        const chip = document.createElement('div');
+        chip.className = 'best-split-chip';
+        chip.innerHTML = `${cube.splits[i]}: <span>${fmtTime(seg)}</span>`;
+        bs.appendChild(chip);
+      });
+    }
+  } else {
+    document.getElementById('bestDate').textContent = '';
+    document.getElementById('bestSplits').innerHTML = '';
+  }
+
+  document.getElementById('statCount').textContent = times.length;
+  document.getElementById('statAvg').textContent   = times.length ? fmtTime(Math.round(times.reduce((a,b)=>a+b,0)/times.length)) : '—';
+  document.getElementById('statAo5').textContent   = ao(times, 5);
+  document.getElementById('statAo12').textContent  = ao(times, 12);
+  const worst = times.length ? Math.max(...times) : null;
+  document.getElementById('statWorst').textContent = fmtTime(worst);
+
+  const list = document.getElementById('historyList');
+  if (!records.length) { list.innerHTML = '<div class="empty-msg">žádné záznamy</div>'; return; }
+  list.innerHTML = '';
+  [...records].reverse().forEach((rec, ri) => {
+    const realIdx = records.length - 1 - ri;
+    const isBest  = rec.time === best;
+    const div     = document.createElement('div');
+    div.className = 'history-item';
+
+    let splitsHtml = '';
+    if (rec.splits && rec.splits.length && hasSplits()) {
+      splitsHtml = '<div class="history-splits-row">' +
+        rec.splits.map((seg, i) => `<span class="history-split-chip">${cube.splits[i]}: ${fmtTime(seg)}</span>`).join('') +
+        '</div>';
+    }
+
+    div.innerHTML = `
+      <span class="history-num">${records.length - ri}</span>
+      <div class="history-main">
+        <div class="history-time${isBest?' best':''}">${fmtTime(rec.time)}${isBest?' ★':''}</div>
+        ${splitsHtml}
+      </div>
+      <span class="history-date">${new Date(rec.date).toLocaleDateString('cs-CZ')}</span>
+      <button class="history-del" onclick="deleteRecord(${realIdx})">✕</button>`;
+    list.appendChild(div);
+  });
+}
+
+function ao(times, n) {
+  if (times.length < n) return '—';
+  const last    = times.slice(-n);
+  const sorted  = [...last].sort((a, b) => a - b);
+  const trimmed = sorted.slice(1, -1);
+  return fmtTime(Math.round(trimmed.reduce((a, b) => a + b, 0) / trimmed.length));
+}
+
+function deleteRecord(idx) {
+  if (!data[activeCube]) return;
+  data[activeCube].splice(idx, 1);
+  saveToStorage(); renderStats();
+}
+
+// ========== CUBE TABS ==========
+function renderCubeTabs() {
+  const container = document.getElementById('cubeTabs');
+  container.innerHTML = '';
+  CUBES.forEach(cube => {
+    const btn = document.createElement('button');
+    btn.className = 'cube-tab' + (cube.id === activeCube ? ' active' : '');
+    btn.textContent = cube.label;
+    btn.onclick = () => { activeCube = cube.id; renderAll(); };
+    container.appendChild(btn);
+  });
+}
+
+function renderContext() {
+  const cube = getCube();
+  document.getElementById('solveContext').textContent = cube.label.toUpperCase();
+  if (hasSplits()) {
+    document.getElementById('timerHint').innerHTML =
+      '[ MEZERNÍK ] start &amp; stop &nbsp;·&nbsp; [ MEZIČAS ] nebo klávesa L';
+  } else {
+    document.getElementById('timerHint').innerHTML = '[ MEZERNÍK ] start / stop';
+  }
+}
+
+function renderAll() {
+  resetTimer();
+  renderCubeTabs();
+  renderContext();
+  renderSplitsArea();
+  renderStats();
+}
+
+// ========== KEYBOARD ==========
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+  if (e.code === 'Space') { e.preventDefault(); toggleTimer(); }
+  if ((e.code === 'KeyL') && running && hasSplits()) { e.preventDefault(); markLap(); }
+});
+
+// ========== DATA IO ==========
+function exportData() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'cube-timer-data.json';
+  a.click();
+  showToast('Data exportována!');
+}
+
+function importData(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    try {
+      const imported = JSON.parse(evt.target.result);
+      for (const key in imported) {
+        if (!data[key]) data[key] = [];
+        const existing = new Set(data[key].map(r => r.date + r.time));
+        imported[key].forEach(rec => { if (!existing.has(rec.date + rec.time)) data[key].push(rec); });
+      }
+      saveToStorage(); renderAll();
+      showToast('Data importována a sloučena!');
+    } catch(err) { showToast('Chyba při importu!', true); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function clearCurrentData() {
+  if (!confirm('Opravdu smazat všechna data pro ' + getCube().label + '?')) return;
+  delete data[activeCube];
+  saveToStorage(); renderAll();
+  showToast('Data smazána.');
+}
+
+function showToast(msg, error=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (error ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+// ========== FULLSCREEN ==========
+function toggleFullscreen() {
+  const el = document.documentElement;
+  const btn = document.getElementById('fsBtn');
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen).call(el);
+    btn.textContent = '✕FS';
+    btn.classList.add('active');
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen).call(document);
+    btn.textContent = '⛶';
+    btn.classList.remove('active');
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  const btn = document.getElementById('fsBtn');
+  if (!document.fullscreenElement) { btn.textContent = '⛶'; btn.classList.remove('active'); }
+});
+
+// ========== INIT ==========
+loadFromStorage();
+renderAll();
+</script>
+</body>
+</html>
